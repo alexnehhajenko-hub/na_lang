@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import LanguageSwitcher from "./LanguageSwitcher";
 import { getT, type Locale } from "@/src/i18n";
 
@@ -7,9 +8,21 @@ export default function SiteHeader({ locale }: { locale: Locale }) {
 
   return (
     <header className="headerRow">
-      <Link href={`/${locale}`} className="brand">
-        <span className="brandName">AKWELD</span>
-        <span className="brandTag">{t.common.tagline}</span>
+      <Link href={`/${locale}`} className="brand" aria-label="AKWELD Home">
+        <span className="brandLogo">
+          <Image
+            src="/akweld-emblem.png"
+            alt="AKWELD"
+            width={38}
+            height={38}
+            priority
+          />
+        </span>
+
+        <span className="brandText">
+          <span className="brandName">AKWELD</span>
+          <span className="brandTag">{t.common.tagline}</span>
+        </span>
       </Link>
 
       <nav className="nav" aria-label="Main navigation">
