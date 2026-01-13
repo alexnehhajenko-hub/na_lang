@@ -4,6 +4,8 @@ import { getT, type Locale } from "@/src/i18n";
 export default function HomePage({ params }: { params: { locale: Locale } }) {
   const t = getT(params.locale);
 
+  const topServices = t.services.cards.slice(0, 3);
+
   return (
     <div className="container">
       <section className="hero">
@@ -45,14 +47,21 @@ export default function HomePage({ params }: { params: { locale: Locale } }) {
 
           <div className="heroCard">
             <h2 className="sectionTitle">{t.home.focusTitle}</h2>
+
             <div className="cards">
-              {t.home.focusCards.map((c) => (
-                <div key={c.title} className="card">
+              {topServices.map((c) => (
+                <Link
+                  key={c.slug}
+                  href={`/${params.locale}/services/${c.slug}`}
+                  className="card"
+                  style={{ display: "block" }}
+                >
                   <h3>{c.title}</h3>
                   <p>{c.text}</p>
-                </div>
+                </Link>
               ))}
             </div>
+
             <p className="small" style={{ marginTop: 12, position: "relative" }}>
               {t.home.complianceNote}
             </p>
@@ -64,10 +73,15 @@ export default function HomePage({ params }: { params: { locale: Locale } }) {
         <h2 className="sectionTitle">{t.home.servicesTitle}</h2>
         <div className="cards">
           {t.services.cards.slice(0, 6).map((s) => (
-            <div key={s.title} className="card">
+            <Link
+              key={s.slug}
+              href={`/${params.locale}/services/${s.slug}`}
+              className="card"
+              style={{ display: "block" }}
+            >
               <h3>{s.title}</h3>
               <p>{s.text}</p>
-            </div>
+            </Link>
           ))}
         </div>
       </section>
