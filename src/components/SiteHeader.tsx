@@ -11,7 +11,7 @@ export default function SiteHeader({ locale }: { locale: Locale }) {
       <Link href={`/${locale}`} className="brand" aria-label="AKWELD Home">
         <span className="brandLogo">
           <Image
-            src="/akweld-emblem.png"
+            src="/akweld-emblem.png.PNG"
             alt="AKWELD"
             width={38}
             height={38}
