@@ -4,7 +4,7 @@ const en = {
     getQuote: "Get a quote",
     viewServices: "Services",
     viewProjects: "Projects",
-    footerLine: "Estonia & Sweden • Reliable steelwork partner",
+    footerLine: "Estonia base • Working across Scandinavia & the Baltics",
   },
   nav: {
     services: "Services",
@@ -12,8 +12,8 @@ const en = {
     contact: "Contact",
   },
   home: {
-    heroTitle1: "Steelwork partner for",
-    heroTitle2: "Estonia & Sweden",
+    heroTitle1: "Steelwork for",
+    heroTitle2: "Scandinavia & the Baltics",
     heroText:
       "Fabrication, installation and skilled workforce for steel structures. Fast communication, clear scope, safe delivery.",
     kpi1Top: "Estonia",
@@ -25,30 +25,88 @@ const en = {
     kpi4Top: "Workforce",
     kpi4Bottom: "Welders / fitters",
     focusTitle: "What we do",
-    focusCards: [
-      { title: "Fabrication", text: "Workshop production and custom steel parts." },
-      { title: "Installation", text: "On-site assembly, lifting, finishing." },
-      { title: "Workforce rental", text: "Skilled welders and fitters for your project." },
-    ],
     complianceNote:
-      "We operate in Estonia and support projects in Sweden. We comply with required local permits and safety requirements.",
+      "We operate from Estonia and support projects across Scandinavia & the Baltics. We comply with required local permits and safety requirements.",
     servicesTitle: "Services",
     projectsTitle: "Selected projects",
   },
   services: {
     title: "Services",
     lead:
-      "From workshop fabrication to on-site installation — plus workforce rental for Sweden and Estonia projects.",
+      "From workshop fabrication to on-site installation — plus skilled workforce for projects across Scandinavia & the Baltics.",
+    detailsTitle: "What’s included",
+    photoHint:
+      "Optional: add your own photos to /public/services/{slug}.jpg and we’ll show them on this page later.",
     cards: [
-      { title: "Steel fabrication", text: "Custom steel parts and assemblies based on drawings or measurements." },
-      { title: "Installation & монтаж", text: "On-site installation of steel structures, supports, platforms." },
-      { title: "Workforce rental (Sweden)", text: "Welders, fitters, installers — short or long-term engagement." },
-      { title: "Workshop / facility capacity", text: "Production space and capacity for ongoing orders." },
-      { title: "Repairs & modifications", text: "Fixes, reinforcements, adjustments on existing structures." },
-      { title: "Custom projects", text: "Non-standard tasks, fast turnaround with clear scope." },
+      {
+        slug: "fabrication",
+        title: "Steel fabrication",
+        text: "Workshop production and custom steel parts based on drawings.",
+        points: [
+          "Production according to drawings / measurements",
+          "Custom parts, assemblies, frames, platforms",
+          "Quality welds and clean finishing",
+          "Packing and delivery coordination",
+        ],
+      },
+      {
+        slug: "installation",
+        title: "Installation",
+        text: "On-site assembly, lifting, fitting, finishing and adjustments.",
+        points: [
+          "On-site installation teams",
+          "Assembly, fitting, alignment",
+          "Coordination with site schedule and safety",
+          "Final checks and handover",
+        ],
+      },
+      {
+        slug: "workforce",
+        title: "Skilled workforce",
+        text: "Welders, fitters, installers — short or long-term engagement.",
+        points: [
+          "Welders / fitters / installers",
+          "Flexible duration: weeks or months",
+          "Work under your supervision or ours (by agreement)",
+          "Clear reporting and communication",
+        ],
+      },
+      {
+        slug: "repairs",
+        title: "Repairs & modifications",
+        text: "Reinforcement, adjustments, fixes on existing structures.",
+        points: [
+          "Reinforcement and repairs",
+          "Modifications on-site or in workshop",
+          "Fast response for urgent fixes",
+          "Documentation and photo reports if needed",
+        ],
+      },
+      {
+        slug: "capacity",
+        title: "Workshop capacity",
+        text: "Production space and capacity for ongoing orders.",
+        points: [
+          "Ongoing production support",
+          "Repeat batches and series work",
+          "Stable timelines and planning",
+          "Flexible scaling by workload",
+        ],
+      },
+      {
+        slug: "custom",
+        title: "Custom projects",
+        text: "Non-standard tasks with clear scope and fast turnaround.",
+        points: [
+          "Non-standard and custom jobs",
+          "Quick estimation with clarifying questions",
+          "Transparent scope and timeline",
+          "Reliable delivery and support",
+        ],
+      },
     ],
     note:
-      "Tell us your scope and location — we’ll suggest the best approach and timeline.",
+      "Send your scope and location — we’ll suggest the best approach and timeline.",
   },
   projects: {
     title: "Projects",
@@ -60,7 +118,7 @@ const en = {
       { title: "Steel frames", text: "Fast production and assembly." },
       { title: "Supports & brackets", text: "Custom parts, repeat batches." },
       { title: "Repair works", text: "Reinforcement and modifications." },
-      { title: "Workforce projects", text: "Welders and fitters for Swedish sites." },
+      { title: "Workforce projects", text: "Welders and fitters for sites." },
     ],
     note:
       "When you have 10–20 real project photos, this page becomes your #1 sales tool.",
@@ -75,10 +133,10 @@ const en = {
     formMessage: "Message (scope, location, timeline, attach drawings if available)",
     formSend: "Send request",
     formHint: "Form is a placeholder now — later we connect email or CRM.",
-    block1Title: "Estonia",
-    block1Text: "Base operations and fabrication.",
-    block2Title: "Sweden",
-    block2Text: "Teams and workforce support for projects.",
+    block1Title: "Base",
+    block1Text: "Estonia — operations and fabrication.",
+    block2Title: "Region",
+    block2Text: "Scandinavia & the Baltics — project support.",
     block3Title: "Response time",
     block3Text: "Usually within 24 hours on working days.",
     note:
