@@ -31,14 +31,17 @@ export default function ContactPage({ params }: { params: { locale: Locale } }) 
           <div className="card">
             <h3 style={{ marginTop: 0 }}>{t.common.getQuote}</h3>
 
-            <form className="form" onSubmit={(e) => e.preventDefault()}>
-              <input className="input" placeholder={t.contact.formName} />
-              <input className="input" placeholder={t.contact.formPhone} />
-              <input className="input" placeholder={t.contact.formEmail} />
-              <textarea className="textarea" placeholder={t.contact.formMessage} />
+            {/* Placeholder form (no JS handlers in Server Component) */}
+            <form className="form" action="#" method="post">
+              <input className="input" name="name" placeholder={t.contact.formName} />
+              <input className="input" name="phone" placeholder={t.contact.formPhone} />
+              <input className="input" name="email" placeholder={t.contact.formEmail} />
+              <textarea className="textarea" name="message" placeholder={t.contact.formMessage} />
+
               <button className="btn" type="submit">
                 {t.contact.formSend}
               </button>
+
               <div className="small">{t.contact.formHint}</div>
             </form>
 
