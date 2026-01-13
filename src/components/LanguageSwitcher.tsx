@@ -1,42 +1,48 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { Locale, PRIMARY_LOCALES, RU_LOCALE, normalizePathToLocale } from "@/src/i18n";
+import { LOCALES, Locale, normalizePathToLocale } from "@/src/i18n";
+
+function label(l: Locale) {
+  switch (l) {
+    case "en":
+      return "EN";
+    case "sv":
+      return "SV";
+    case "fi":
+      return "FI";
+    case "da":
+      return "DA";
+    case "no":
+      return "NO";
+    case "ru":
+      return "RU";
+    default:
+      return l.toUpperCase();
+  }
+}
 
 export default function LanguageSwitcher({ locale }: { locale: Locale }) {
   const router = useRouter();
-  const pathname = usePathname() || "/en";
+  const pathname = usePathname() || `/${locale}`;
 
   function go(nextLocale: Locale) {
     const nextPath = normalizePathToLocale(pathname, nextLocale);
     router.push(nextPath);
   }
 
-  const primaryValue = locale === RU_LOCALE ? "en" : locale;
-
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <select
-        className="pill"
-        value={primaryValue}
-        onChange={(e) => go(e.target.value as Locale)}
-        aria-label="Language"
-      >
-        {PRIMARY_LOCALES.map((l) => (
-          <option key={l} value={l}>
-            {l.toUpperCase()}
-          </option>
-        ))}
-      </select>
-
-      <button
-        className={locale === RU_LOCALE ? "btn" : "btnGhost"}
-        onClick={() => go(RU_LOCALE)}
-        type="button"
-        aria-label="Русский"
-      >
-        RU
-      </button>
-    </div>
+    <select
+      className="pill"
+      value={locale}
+      onChange={(e) => go(e.target.value as Locale)}
+      aria-label="Language"
+    >
+      {LOCALES.map((l) => (
+        <option key={l} value={l}>
+          {label(l)}
+        </option>
+      ))}
+    </select>
   );
 }
