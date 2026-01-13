@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getT, type Locale } from "@/src/i18n";
 
 export default function ServicesPage({ params }: { params: { locale: Locale } }) {
@@ -14,10 +15,15 @@ export default function ServicesPage({ params }: { params: { locale: Locale } })
         <div className="section" style={{ paddingTop: 14 }}>
           <div className="cards">
             {t.services.cards.map((c) => (
-              <div key={c.title} className="card">
+              <Link
+                key={c.slug}
+                href={`/${params.locale}/services/${c.slug}`}
+                className="card"
+                style={{ display: "block" }}
+              >
                 <h3>{c.title}</h3>
                 <p>{c.text}</p>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
