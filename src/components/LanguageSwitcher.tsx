@@ -1,38 +1,61 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
-import { LOCALES, Locale, normalizePathToLocale } from "@/src/i18n";
+import { usePathname } from "next/navigation";
+import { useMemo } from "react";
+
+type Locale = "en" | "sv" | "fi" | "no" | "da" | "ru" | "et";
+
+const LOCALES: Locale[] = ["en", "ru", "et", "sv", "fi", "no", "da"];
 
 const LABELS: Record<Locale, string> = {
   en: "EN",
+  ru: "RU",
+  et: "ET",
   sv: "SV",
   fi: "FI",
-  da: "DA",
   no: "NO",
-  ru: "RU",
+  da: "DA",
 };
 
-export default function LanguageSwitcher({ locale }: { locale: Locale }) {
-  const router = useRouter();
-  const pathname = usePathname() || `/${locale}`;
+export default function LanguageSwitcher({
+  currentLocale,
+}: {
+  currentLocale: Locale;
+}) {
+  const pathname = usePathname() || "/";
+
+  const restPath = useMemo(() => {
+    // pathname: /ru/quote  OR  /ru  OR  /
+    const parts = pathname.split("/").filter(Boolean);
+
+    // If first segment is a locale, drop it
+    if (parts.length > 0 && LOCALES.includes(parts[0] as Locale)) {
+      parts.shift();
+    }
+
+    const tail = parts.join("/");
+    return tail ? `/${tail}` : "";
+  }, [pathname]);
 
   function go(nextLocale: Locale) {
-    const nextPath = normalizePathToLocale(pathname, nextLocale);
-    router.push(nextPath);
+    const search = typeof window !== "undefined" ? window.location.search : "";
+    window.location.href = `/${nextLocale}${restPath}${search}`;
   }
 
   return (
-    <select
-      className="pill"
-      value={locale}
-      onChange={(e) => go(e.target.value as Locale)}
-      aria-label="Language"
-    >
-      {LOCALES.map((l) => (
-        <option key={l} value={l}>
-          {LABELS[l]}
-        </option>
-      ))}
-    </select>
+    <div className="lang">
+      <select
+        className="langSelect"
+        value={currentLocale}
+        onChange={(e) => go(e.target.value as Locale)}
+        aria-label="Language"
+      >
+        {LOCALES.map((lc) => (
+          <option key={lc} value={lc}>
+            {LABELS[lc]}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
