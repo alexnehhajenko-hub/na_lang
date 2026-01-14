@@ -1,682 +1,554 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import styles from "./QuoteCalculatorForm.module.css";
 
-type PricingModel = "weight" | "hours" | "hybrid";
+type CalcMode = "weight" | "hours";
+type Region = "baltics" | "scandinavia" | "both";
+type Complexity = "standard" | "precision";
+type SteelSupply = "client" | "akweld";
 
-type NdtMethod = "none" | "vt" | "mt" | "pt" | "ut" | "rt";
-type Percent = 0 | 10 | 25 | 50 | 100;
+type Locale = "en" | "ru" | "sv" | "fi" | "da" | "no" | "et";
 
-type SurfacePrep = "st2" | "sa25";
-type CoatingSystem = "none" | "primer" | "c2" | "c3" | "c4" | "c5" | "galv" | "fire";
+const SUPPORTED: Locale[] = ["en", "ru", "sv", "fi", "da", "no", "et"];
 
-type Delivery = "pickup" | "akweld";
-type Urgency = "standard" | "rush" | "superrush";
-
-type FormState = {
-  // контакт
-  company: string;
-  person: string;
-  email: string;
-  phone: string;
-  location: string;
-
-  // база
-  pricingModel: PricingModel;
-  weightKg: string;
-  hours: string;
-
-  drawings: "yes" | "partial" | "no";
-  material: "s235" | "s355" | "stainless" | "aluminium";
-  qty: "1-5" | "6-20" | "20+";
-  dimensions: string;
-
-  // сложность/точность (галочки)
-  tightTolerances: boolean;
-  precisionFit: boolean;
-  straightening: boolean;
-  trialFit: boolean;
-  manyParts: boolean;
-
-  // стандарты/контроль
-  exc: "exc1" | "exc2" | "exc3" | "exc4";
-  iso5817: "d" | "c" | "b";
-
-  ndtMethod: NdtMethod;
-  ndtPercent: Percent;
-
-  // покрытие
-  surfacePrep: SurfacePrep;
-  coating: CoatingSystem;
-  dft: "80" | "120" | "160" | "240";
-  ral: string;
-
-  // логистика/сроки
-  delivery: Delivery;
-  oversize: boolean;
-  urgency: Urgency;
-
-  // описание
-  description: string;
-};
-
-const CONFIG = {
-  currency: "EUR",
-
-  // ===== БАЗОВЫЕ СТАВКИ (поставишь свои) =====
-  rateEurPerKg: {
-    s235: 3.2,
-    s355: 3.5,
-    stainless: 8.0,
-    aluminium: 7.0,
-  },
-  rateEurPerHour: {
-    fabrication: 45,
-  },
-
-  // Покраска/покрытие (ориентиры)
-  coatingEurPerM2: {
-    none: 0,
-    primer: 6,
-    c2: 10,
-    c3: 14,
-    c4: 18,
-    c5: 24,
-    galv: 22,
-    fire: 28,
-  },
-
-  // Поверхность: St2 / Sa2.5 (коэффициенты к покрытию)
-  surfacePrepFactor: {
-    st2: 1.0,
-    sa25: 1.25,
-  },
-
-  // DFT коэффициент
-  dftFactor: {
-    "80": 1.0,
-    "120": 1.15,
-    "160": 1.30,
-    "240": 1.55,
-  },
-
-  // NDT ставки (очень грубо; лучше позже уточнить)
-  ndtBaseEur: {
-    none: 0,
-    vt: 0.5,
-    mt: 1.8,
-    pt: 2.0,
-    ut: 3.5,
-    rt: 6.0,
-  },
-
-  // Сложность — коэффициенты
-  complexity: {
-    tightTolerances: 0.20,
-    precisionFit: 0.20,
-    straightening: 0.20,
-    trialFit: 0.25,
-    manyParts: 0.15,
-  },
-
-  // EXC коэффициенты
-  excFactor: {
-    exc1: 1.0,
-    exc2: 1.08,
-    exc3: 1.18,
-    exc4: 1.30,
-  },
-
-  // ISO 5817 коэффициенты
-  isoFactor: {
-    d: 1.0,
-    c: 1.05,
-    b: 1.12,
-  },
-
-  // Срочность
-  urgencyFactor: {
-    standard: 1.0,
-    rush: 1.15,
-    superrush: 1.30,
-  },
-
-  // Логистика (ориентиры)
-  deliveryEur: {
-    pickup: 0,
-    akweld: 250,
-  },
-  oversizeEur: 350,
-
-  // Площадь окраски из веса (очень грубая оценка для сайта)
-  // Для типовых конструкций часто 25–45 м² на 1 тонну. Возьмём 35 м²/т.
-  paintAreaM2PerTon: 35,
-};
-
-function toNum(v: string): number {
-  const n = Number(String(v).replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
+function detectLocale(pathname: string): Locale {
+  const seg = pathname.split("/").filter(Boolean)[0] as Locale | undefined;
+  if (seg && SUPPORTED.includes(seg)) return seg;
+  return "en";
 }
 
-function fmtMoney(x: number): string {
-  const v = Math.round(x);
-  return `${v.toLocaleString("ru-RU")} ${CONFIG.currency}`;
+function money(n: number) {
+  const rounded = Math.round(n);
+  return rounded.toLocaleString("ru-RU") + " €";
 }
 
-function clamp01(x: number) {
-  return Math.max(0, Math.min(1, x));
+function clamp(n: number, a: number, b: number) {
+  return Math.min(b, Math.max(a, n));
 }
 
 export default function QuoteCalculatorForm() {
-  const [state, setState] = useState<FormState>({
-    company: "",
-    person: "",
-    email: "",
-    phone: "",
-    location: "",
+  const pathname = usePathname() || "/";
+  const locale = detectLocale(pathname);
 
-    pricingModel: "hybrid",
-    weightKg: "",
-    hours: "",
+  // По твоей просьбе делаем тексты на RU (позже разнесём в i18n на все языки качественно)
+  const isRu = locale === "ru";
 
-    drawings: "yes",
-    material: "s355",
-    qty: "1-5",
-    dimensions: "",
+  const [mode, setMode] = useState<CalcMode>("weight");
 
-    tightTolerances: false,
-    precisionFit: false,
-    straightening: false,
-    trialFit: false,
-    manyParts: false,
+  // Контакты
+  const [name, setName] = useState("");
+  const [company, setCompany] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
 
-    exc: "exc2",
-    iso5817: "c",
+  // Проект
+  const [region, setRegion] = useState<Region>("both");
+  const [location, setLocation] = useState("");
+  const [deadline, setDeadline] = useState<"normal" | "fast">("normal");
 
-    ndtMethod: "none",
-    ndtPercent: 0,
+  // База расчёта
+  const [weightTons, setWeightTons] = useState<number>(2);
+  const [hours, setHours] = useState<number>(80);
 
-    surfacePrep: "st2",
-    coating: "none",
-    dft: "120",
-    ral: "",
+  // Цена/ставки (ориентиры — ты потом подправишь под ваши реальные)
+  const [ratePerTon, setRatePerTon] = useState<number>(650); // €/т (работы без металла)
+  const [ratePerHour, setRatePerHour] = useState<number>(55); // €/ч
 
-    delivery: "pickup",
-    oversize: false,
-    urgency: "standard",
+  // Металл (если AKweld закупает)
+  const [steelSupply, setSteelSupply] = useState<SteelSupply>("client");
+  const [steelPricePerTon, setSteelPricePerTon] = useState<number>(950); // €/т (ориентир)
+  const [steelMarkupPct, setSteelMarkupPct] = useState<number>(6); // %
 
-    description: "",
-  });
+  // Опции влияющие на цену
+  const [designSupport, setDesignSupport] = useState(false); // чертежи/КМ/КМД
+  const [qaDocs, setQaDocs] = useState(true); // WPS/PQR, отчёты, паспорта
+  const [ndt, setNdt] = useState<"none" | "vt" | "mt" | "ut">("vt"); // контроль
+  const [tolerances, setTolerances] = useState<Complexity>("standard"); // точность/рихтовка
+  const [surfacePrep, setSurfacePrep] = useState<"none" | "sa2_5" | "brush">("none");
+  const [coating, setCoating] = useState<"none" | "primer" | "paint" | "galv">("none");
+  const [siteInstallation, setSiteInstallation] = useState(false);
+  const [transport, setTransport] = useState(false);
+  const [lifting, setLifting] = useState(false); // краны/такелаж
+  const [rush, setRush] = useState(false); // срочно
 
+  const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
-
-  function patch<K extends keyof FormState>(k: K, v: FormState[K]) {
-    setState((s) => ({ ...s, [k]: v }));
-  }
+  const [serverMsg, setServerMsg] = useState<string>("");
 
   const calc = useMemo(() => {
-    const weightKg = toNum(state.weightKg);
-    const hours = toNum(state.hours);
+    // База
+    const base =
+      mode === "weight"
+        ? clamp(weightTons, 0.1, 2000) * clamp(ratePerTon, 1, 100000)
+        : clamp(hours, 1, 200000) * clamp(ratePerHour, 1, 1000);
 
-    // сложность
-    const complexityAdd =
-      (state.tightTolerances ? CONFIG.complexity.tightTolerances : 0) +
-      (state.precisionFit ? CONFIG.complexity.precisionFit : 0) +
-      (state.straightening ? CONFIG.complexity.straightening : 0) +
-      (state.trialFit ? CONFIG.complexity.trialFit : 0) +
-      (state.manyParts ? CONFIG.complexity.manyParts : 0);
+    let total = base;
 
-    const complexityFactor = 1 + complexityAdd;
+    // Сложность/точность
+    if (tolerances === "precision") total *= 1.22; // больше рихтовки, измерений и времени
 
-    const excFactor = CONFIG.excFactor[state.exc];
-    const isoFactor = CONFIG.isoFactor[state.iso5817];
-    const urgencyFactor = CONFIG.urgencyFactor[state.urgency];
+    // Документация/процессы
+    if (designSupport) total += 250; // инженерка/поддержка
+    if (qaDocs) total += 120; // базовый пакет документации
 
-    const techFactor = complexityFactor * excFactor * isoFactor * urgencyFactor;
+    // Контроль
+    if (ndt === "vt") total += 90;
+    if (ndt === "mt") total += 240;
+    if (ndt === "ut") total += 420;
 
-    // изготовление по весу
-    const rateKg = CONFIG.rateEurPerKg[state.material];
-    const fabricationByWeight = weightKg * rateKg * techFactor;
+    // Подготовка/покраска
+    if (surfacePrep === "brush") total += base * 0.05;
+    if (surfacePrep === "sa2_5") total += base * 0.10;
 
-    // изготовление по часам
-    const rateH = CONFIG.rateEurPerHour.fabrication;
-    // часовую оценку тоже усиливаем, но “сложность” уже внутри времени — поэтому берём чуть мягче:
-    const hourFactor = (1 + complexityAdd * 0.6) * excFactor * isoFactor * urgencyFactor;
-    const fabricationByHours = hours * rateH * hourFactor;
+    if (coating === "primer") total += base * 0.08;
+    if (coating === "paint") total += base * 0.18;
+    if (coating === "galv") total += base * 0.22;
 
-    // оценка площади для покраски (если выбрано покрытие)
-    const tons = weightKg / 1000;
-    const paintAreaM2 = tons * CONFIG.paintAreaM2PerTon;
-    const coatingRate = CONFIG.coatingEurPerM2[state.coating];
-    const surfaceF = CONFIG.surfacePrepFactor[state.surfacePrep];
-    const dftF = CONFIG.dftFactor[state.dft];
-    const coatingCost = paintAreaM2 * coatingRate * surfaceF * dftF;
+    // Логистика/монтаж
+    if (transport) total += 180;
+    if (lifting) total += 240;
+    if (siteInstallation) total += base * 0.20;
 
-    // NDT (упрощённо): базовая ставка * вес(в т) * %/100
-    const ndtBase = CONFIG.ndtBaseEur[state.ndtMethod];
-    const ndtPct = clamp01(state.ndtPercent / 100);
-    const ndtCost = ndtBase * tons * 1000 * ndtPct; // умножаем на 1000 чтобы было ощутимо (как “объём”)
-    // (потом заменим на расчёт по метражу швов/кол-ву соединений)
+    // Регион/сроки
+    if (region === "scandinavia") total += 120;
+    if (region === "both") total += 180;
 
-    // логистика
-    const deliveryCost = CONFIG.deliveryEur[state.delivery] + (state.oversize ? CONFIG.oversizeEur : 0);
+    if (deadline === "fast") total += 150;
+    if (rush) total *= 1.15;
 
-    const baseByWeight = fabricationByWeight + coatingCost + ndtCost + deliveryCost;
-    const baseByHours = fabricationByHours + coatingCost + ndtCost + deliveryCost;
-
-    let recommended: "weight" | "hours" | "hybrid" = "hybrid";
-    // авто-рекомендация: 2+ сложных галочки => часы
-    const flagsCount =
-      (state.tightTolerances ? 1 : 0) +
-      (state.precisionFit ? 1 : 0) +
-      (state.straightening ? 1 : 0) +
-      (state.trialFit ? 1 : 0) +
-      (state.manyParts ? 1 : 0);
-    if (flagsCount >= 2) recommended = "hours";
-    else recommended = "weight";
-
-    // итог по выбранной модели
-    let total = 0;
-    if (state.pricingModel === "weight") total = baseByWeight;
-    if (state.pricingModel === "hours") total = baseByHours;
-    if (state.pricingModel === "hybrid") total = Math.max(baseByWeight, baseByHours);
+    // Металл (если вы поставляете)
+    let steelCost = 0;
+    if (steelSupply === "akweld") {
+      const tons = clamp(weightTons, 0.1, 2000);
+      const p = clamp(steelPricePerTon, 1, 100000);
+      steelCost = tons * p * (1 + clamp(steelMarkupPct, 0, 50) / 100);
+      total += steelCost;
+    }
 
     return {
-      weightKg,
-      hours,
-      complexityFactor,
-      techFactor,
-      fabricationByWeight,
-      fabricationByHours,
-      coatingCost,
-      ndtCost,
-      deliveryCost,
-      baseByWeight,
-      baseByHours,
+      base,
+      steelCost,
       total,
-      recommended,
-      flagsCount,
-      paintAreaM2,
     };
-  }, [state]);
+  }, [
+    mode,
+    weightTons,
+    hours,
+    ratePerTon,
+    ratePerHour,
+    tolerances,
+    designSupport,
+    qaDocs,
+    ndt,
+    surfacePrep,
+    coating,
+    siteInstallation,
+    transport,
+    lifting,
+    region,
+    deadline,
+    rush,
+    steelSupply,
+    steelPricePerTon,
+    steelMarkupPct,
+  ]);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (status === "sending") return;
+  const requestText = useMemo(() => {
+    const lines: string[] = [];
+    lines.push("ЗАПРОС РАСЧЁТА (AKWELD)");
+    lines.push("");
+    lines.push(`Контакт: ${name || "-"} | Компания: ${company || "-"}`);
+    lines.push(`Телефон/WhatsApp: ${phone || "-"} | Email: ${email || "-"}`);
+    lines.push("");
+    lines.push(`Регион: ${region === "baltics" ? "Прибалтика" : region === "scandinavia" ? "Скандинавия" : "Скандинавия + Прибалтика"}`);
+    lines.push(`Локация объекта: ${location || "-"}`);
+    lines.push(`Срок: ${deadline === "fast" ? "Срочно" : "Обычно"}`);
+    lines.push("");
+    lines.push(`Модель расчёта: ${mode === "weight" ? "По весу" : "По часам"}`);
+    if (mode === "weight") lines.push(`Вес: ${weightTons} т`);
+    if (mode === "hours") lines.push(`Трудоёмкость: ${hours} ч`);
+    lines.push("");
+    lines.push(`Точность/рихтовка: ${tolerances === "precision" ? "Повышенная точность (много подгонки)" : "Стандарт"}`);
+    lines.push(`Документация (WPS/отчёты/паспорта): ${qaDocs ? "Да" : "Нет"}`);
+    lines.push(`Инженерная поддержка (КМ/КМД): ${designSupport ? "Да" : "Нет"}`);
+    lines.push(`Контроль сварных соединений: ${
+      ndt === "none" ? "Нет" : ndt === "vt" ? "VT (визуальный)" : ndt === "mt" ? "MT (магнитопорошковый)" : "UT (ультразвук)"
+    }`);
+    lines.push("");
+    lines.push(`Подготовка поверхности: ${
+      surfacePrep === "none" ? "Нет" : surfacePrep === "brush" ? "Мех. зачистка" : "Дробеструй Sa 2.5"
+    }`);
+    lines.push(`Покрытие: ${
+      coating === "none" ? "Нет" : coating === "primer" ? "Грунт" : coating === "paint" ? "Окраска" : "Горячее цинкование"
+    }`);
+    lines.push("");
+    lines.push(`Доставка: ${transport ? "Да" : "Нет"}`);
+    lines.push(`Краны/такелаж: ${lifting ? "Да" : "Нет"}`);
+    lines.push(`Монтаж на объекте: ${siteInstallation ? "Да" : "Нет"}`);
+    lines.push(`Экспресс: ${rush ? "Да" : "Нет"}`);
+    lines.push("");
+    lines.push(`Металл: ${steelSupply === "client" ? "Предоставляет заказчик" : "Закупает AKWELD"}`);
+    if (steelSupply === "akweld") {
+      lines.push(`Цена металла (ориентир): ${steelPricePerTon} €/т + ${steelMarkupPct}%`);
+    }
+    lines.push("");
+    lines.push("Описание / замечания:");
+    lines.push(notes || "-");
+    lines.push("");
+    lines.push(`Ориентир по цене (авторасчёт): ${money(calc.total)}`);
+    lines.push("(Это предварительная оценка. Итог зависит от чертежей, марки стали, объёма и требований.)");
+    return lines.join("\n");
+  }, [
+    name,
+    company,
+    phone,
+    email,
+    region,
+    location,
+    deadline,
+    mode,
+    weightTons,
+    hours,
+    tolerances,
+    qaDocs,
+    designSupport,
+    ndt,
+    surfacePrep,
+    coating,
+    transport,
+    lifting,
+    siteInstallation,
+    rush,
+    steelSupply,
+    steelPricePerTon,
+    steelMarkupPct,
+    notes,
+    calc.total,
+  ]);
 
+  async function handleSubmit() {
     setStatus("sending");
+    setServerMsg("");
+
     try {
+      const payload = {
+        locale,
+        createdAt: new Date().toISOString(),
+        name,
+        company,
+        phone,
+        email,
+        region,
+        location,
+        deadline,
+        mode,
+        weightTons,
+        hours,
+        ratePerTon,
+        ratePerHour,
+        steelSupply,
+        steelPricePerTon,
+        steelMarkupPct,
+        tolerances,
+        designSupport,
+        qaDocs,
+        ndt,
+        surfacePrep,
+        coating,
+        transport,
+        lifting,
+        siteInstallation,
+        rush,
+        notes,
+        estimateEur: Math.round(calc.total),
+        requestText,
+      };
+
       const res = await fetch("/api/quote", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          lang: "ru",
-          ...state,
-          estimate: {
-            totalEur: Math.round(calc.total),
-            totalText: fmtMoney(calc.total),
-            breakdown: {
-              fabricationByWeight: Math.round(calc.fabricationByWeight),
-              fabricationByHours: Math.round(calc.fabricationByHours),
-              coating: Math.round(calc.coatingCost),
-              ndt: Math.round(calc.ndtCost),
-              delivery: Math.round(calc.deliveryCost),
-            },
-          },
-        }),
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error("bad_response");
+
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) throw new Error(data?.error || "Request failed");
+
       setStatus("sent");
-    } catch {
+      setServerMsg("Запрос сформирован и отправлен на сервер. Ниже можно скопировать текст заявки.");
+    } catch (e: any) {
       setStatus("error");
+      setServerMsg(e?.message || "Ошибка отправки. Попробуйте позже.");
+    }
+  }
+
+  async function copyText() {
+    try {
+      await navigator.clipboard.writeText(requestText);
+      setServerMsg("Текст заявки скопирован ✅");
+    } catch {
+      setServerMsg("Не удалось скопировать. Выдели текст вручную и скопируй.");
     }
   }
 
   return (
-    <div className={styles.wrap}>
-      <div className={styles.header}>
-        <h1 className={styles.title}>Запросить цену (под ключ)</h1>
-        <p className={styles.subtitle}>
-          Изготовление → организация контроля → покраска → упаковка → отправка. <br />
-          Ниже — ориентировочный расчёт. Финальная цена подтверждается после просмотра чертежей.
+    <main className={styles.page}>
+      <section className={styles.card}>
+        <h1 className={styles.title}>Запросить цену — калькулятор</h1>
+        <p className={styles.sub}>
+          Отметь требования — получишь ориентир по цене и готовый текст заявки. (Пока RU, потом включим качественные переводы на все языки.)
         </p>
-      </div>
 
-      {status === "sent" ? (
-        <div className={styles.success}>
-          <div className={styles.successTitle}>Заявка отправлена</div>
-          <div className={styles.successText}>
-            Спасибо! Мы получили запрос и свяжемся с вами в ближайшее время.
+        <div className={styles.grid}>
+          <div className={styles.block}>
+            <h2 className={styles.h2}>Контакты</h2>
+            <div className={styles.row2}>
+              <label className={styles.field}>
+                <span>Имя</span>
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ваше имя" />
+              </label>
+              <label className={styles.field}>
+                <span>Компания</span>
+                <input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Название компании" />
+              </label>
+            </div>
+            <div className={styles.row2}>
+              <label className={styles.field}>
+                <span>Телефон / WhatsApp</span>
+                <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+372 ..." />
+              </label>
+              <label className={styles.field}>
+                <span>Email</span>
+                <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@company.com" />
+              </label>
+            </div>
+          </div>
+
+          <div className={styles.block}>
+            <h2 className={styles.h2}>Проект</h2>
+
+            <div className={styles.row2}>
+              <label className={styles.field}>
+                <span>Регион</span>
+                <select value={region} onChange={(e) => setRegion(e.target.value as Region)}>
+                  <option value="baltics">Прибалтика</option>
+                  <option value="scandinavia">Скандинавия</option>
+                  <option value="both">Скандинавия + Прибалтика</option>
+                </select>
+              </label>
+              <label className={styles.field}>
+                <span>Срок</span>
+                <select value={deadline} onChange={(e) => setDeadline(e.target.value as any)}>
+                  <option value="normal">Обычно</option>
+                  <option value="fast">Срочно</option>
+                </select>
+              </label>
+            </div>
+
+            <label className={styles.field}>
+              <span>Локация объекта (город/страна)</span>
+              <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Например: Tallinn / Stockholm" />
+            </label>
+
+            <div className={styles.sep} />
+
+            <div className={styles.row2}>
+              <label className={styles.field}>
+                <span>Модель расчёта</span>
+                <select value={mode} onChange={(e) => setMode(e.target.value as CalcMode)}>
+                  <option value="weight">По весу (тонны)</option>
+                  <option value="hours">По часам (трудоёмкость)</option>
+                </select>
+              </label>
+
+              {mode === "weight" ? (
+                <label className={styles.field}>
+                  <span>Вес, т</span>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={weightTons}
+                    onChange={(e) => setWeightTons(Number(e.target.value))}
+                  />
+                </label>
+              ) : (
+                <label className={styles.field}>
+                  <span>Часы, ч</span>
+                  <input type="number" step="1" value={hours} onChange={(e) => setHours(Number(e.target.value))} />
+                </label>
+              )}
+            </div>
+
+            <div className={styles.row2}>
+              <label className={styles.field}>
+                <span>{mode === "weight" ? "Ставка работ, €/т" : "Ставка, €/ч"}</span>
+                {mode === "weight" ? (
+                  <input type="number" step="1" value={ratePerTon} onChange={(e) => setRatePerTon(Number(e.target.value))} />
+                ) : (
+                  <input type="number" step="1" value={ratePerHour} onChange={(e) => setRatePerHour(Number(e.target.value))} />
+                )}
+              </label>
+
+              <label className={styles.field}>
+                <span>Металл</span>
+                <select value={steelSupply} onChange={(e) => setSteelSupply(e.target.value as SteelSupply)}>
+                  <option value="client">Предоставляет заказчик</option>
+                  <option value="akweld">Закупает AKWELD</option>
+                </select>
+              </label>
+            </div>
+
+            {steelSupply === "akweld" && (
+              <div className={styles.row2}>
+                <label className={styles.field}>
+                  <span>Цена металла, €/т (ориентир)</span>
+                  <input
+                    type="number"
+                    step="1"
+                    value={steelPricePerTon}
+                    onChange={(e) => setSteelPricePerTon(Number(e.target.value))}
+                  />
+                </label>
+                <label className={styles.field}>
+                  <span>Наценка/логистика, %</span>
+                  <input
+                    type="number"
+                    step="1"
+                    value={steelMarkupPct}
+                    onChange={(e) => setSteelMarkupPct(Number(e.target.value))}
+                  />
+                </label>
+              </div>
+            )}
+          </div>
+
+          <div className={styles.block}>
+            <h2 className={styles.h2}>Требования (влияют на цену)</h2>
+
+            <div className={styles.row2}>
+              <label className={styles.field}>
+                <span>Точность / рихтовка</span>
+                <select value={tolerances} onChange={(e) => setTolerances(e.target.value as Complexity)}>
+                  <option value="standard">Стандарт</option>
+                  <option value="precision">Повышенная точность (подгонка/контроль)</option>
+                </select>
+              </label>
+
+              <label className={styles.field}>
+                <span>Контроль сварных соединений</span>
+                <select value={ndt} onChange={(e) => setNdt(e.target.value as any)}>
+                  <option value="none">Нет</option>
+                  <option value="vt">VT (визуальный)</option>
+                  <option value="mt">MT (магнитопорошковый)</option>
+                  <option value="ut">UT (ультразвук)</option>
+                </select>
+              </label>
+            </div>
+
+            <div className={styles.row2}>
+              <label className={styles.field}>
+                <span>Подготовка поверхности</span>
+                <select value={surfacePrep} onChange={(e) => setSurfacePrep(e.target.value as any)}>
+                  <option value="none">Нет</option>
+                  <option value="brush">Мех. зачистка</option>
+                  <option value="sa2_5">Дробеструй Sa 2.5</option>
+                </select>
+              </label>
+
+              <label className={styles.field}>
+                <span>Покрытие</span>
+                <select value={coating} onChange={(e) => setCoating(e.target.value as any)}>
+                  <option value="none">Нет</option>
+                  <option value="primer">Грунт</option>
+                  <option value="paint">Окраска</option>
+                  <option value="galv">Горячее цинкование</option>
+                </select>
+              </label>
+            </div>
+
+            <div className={styles.checks}>
+              <label className={styles.chk}>
+                <input type="checkbox" checked={designSupport} onChange={(e) => setDesignSupport(e.target.checked)} />
+                <span>Инженерная поддержка (КМ/КМД, уточнение узлов)</span>
+              </label>
+
+              <label className={styles.chk}>
+                <input type="checkbox" checked={qaDocs} onChange={(e) => setQaDocs(e.target.checked)} />
+                <span>Документация (WPS/отчёты/паспорта/маркировка)</span>
+              </label>
+
+              <label className={styles.chk}>
+                <input type="checkbox" checked={transport} onChange={(e) => setTransport(e.target.checked)} />
+                <span>Организация доставки</span>
+              </label>
+
+              <label className={styles.chk}>
+                <input type="checkbox" checked={lifting} onChange={(e) => setLifting(e.target.checked)} />
+                <span>Краны/такелаж</span>
+              </label>
+
+              <label className={styles.chk}>
+                <input type="checkbox" checked={siteInstallation} onChange={(e) => setSiteInstallation(e.target.checked)} />
+                <span>Монтаж на объекте</span>
+              </label>
+
+              <label className={styles.chk}>
+                <input type="checkbox" checked={rush} onChange={(e) => setRush(e.target.checked)} />
+                <span>Экспресс (сжатые сроки / приоритет)</span>
+              </label>
+            </div>
+
+            <label className={styles.field}>
+              <span>Описание (габариты, допуски, вес, чертежи, сроки, требования)</span>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Например: балки 12 м, допуск 2 мм, покраска RAL..., контроль MT 10%..." />
+            </label>
+          </div>
+
+          <div className={styles.block}>
+            <h2 className={styles.h2}>Оценка</h2>
+
+            <div className={styles.kpi}>
+              <div className={styles.kpiItem}>
+                <div className={styles.kpiLabel}>База</div>
+                <div className={styles.kpiValue}>{money(calc.base)}</div>
+              </div>
+              <div className={styles.kpiItem}>
+                <div className={styles.kpiLabel}>Металл</div>
+                <div className={styles.kpiValue}>{money(calc.steelCost)}</div>
+              </div>
+              <div className={styles.kpiItem}>
+                <div className={styles.kpiLabel}>Итого (ориентир)</div>
+                <div className={styles.kpiValueStrong}>{money(calc.total)}</div>
+              </div>
+            </div>
+
+            <div className={styles.actions}>
+              <button
+                className={styles.primary}
+                onClick={handleSubmit}
+                disabled={status === "sending"}
+              >
+                {status === "sending" ? "Отправляем..." : "Сформировать запрос"}
+              </button>
+              <button className={styles.secondary} onClick={copyText} type="button">
+                Скопировать текст
+              </button>
+            </div>
+
+            {serverMsg && (
+              <div className={status === "error" ? styles.msgErr : styles.msgOk}>
+                {serverMsg}
+              </div>
+            )}
+
+            <div className={styles.preview}>
+              <div className={styles.previewTitle}>Текст заявки (можно отправить заказчику/менеджеру)</div>
+              <textarea readOnly value={requestText} />
+            </div>
           </div>
         </div>
-      ) : (
-        <form className={styles.form} onSubmit={submit}>
-          <div className={styles.grid}>
-            <div className={styles.card}>
-              <div className={styles.cardTitle}>Контакты</div>
-
-              <label className={styles.label}>
-                Компания
-                <input className={styles.input} value={state.company} onChange={(e) => patch("company", e.target.value)} />
-              </label>
-
-              <label className={styles.label}>
-                Контактное лицо
-                <input className={styles.input} value={state.person} onChange={(e) => patch("person", e.target.value)} />
-              </label>
-
-              <div className={styles.twoCol}>
-                <label className={styles.label}>
-                  Email *
-                  <input className={styles.input} type="email" required value={state.email} onChange={(e) => patch("email", e.target.value)} />
-                </label>
-
-                <label className={styles.label}>
-                  Телефон / WhatsApp
-                  <input className={styles.input} value={state.phone} onChange={(e) => patch("phone", e.target.value)} />
-                </label>
-              </div>
-
-              <label className={styles.label}>
-                Локация проекта (страна/город)
-                <input className={styles.input} value={state.location} onChange={(e) => patch("location", e.target.value)} />
-              </label>
-            </div>
-
-            <div className={styles.card}>
-              <div className={styles.cardTitle}>Модель расчёта</div>
-
-              <label className={styles.label}>
-                Как считать
-                <select className={styles.select} value={state.pricingModel} onChange={(e) => patch("pricingModel", e.target.value as PricingModel)}>
-                  <option value="hybrid">Гибрид (авто) — надёжнее</option>
-                  <option value="weight">По весу (€/кг) — стандарт</option>
-                  <option value="hours">По часам (€/час) — точные/сложные</option>
-                </select>
-              </label>
-
-              <div className={styles.hint}>
-                Рекомендация: <b>{calc.recommended === "hours" ? "по часам" : "по весу"}</b>{" "}
-                (сложность отмечено: <b>{calc.flagsCount}</b>)
-              </div>
-
-              <div className={styles.twoCol}>
-                <label className={styles.label}>
-                  Вес (кг)
-                  <input className={styles.input} value={state.weightKg} onChange={(e) => patch("weightKg", e.target.value)} placeholder="например 1200" />
-                </label>
-
-                <label className={styles.label}>
-                  Часы (если знаете)
-                  <input className={styles.input} value={state.hours} onChange={(e) => patch("hours", e.target.value)} placeholder="например 60" />
-                </label>
-              </div>
-
-              <label className={styles.label}>
-                Габариты max (L×W×H)
-                <input className={styles.input} value={state.dimensions} onChange={(e) => patch("dimensions", e.target.value)} placeholder="например 6.0×2.2×2.5 м" />
-              </label>
-
-              <div className={styles.twoCol}>
-                <label className={styles.label}>
-                  Чертежи
-                  <select className={styles.select} value={state.drawings} onChange={(e) => patch("drawings", e.target.value as any)}>
-                    <option value="yes">Есть (PDF/DWG)</option>
-                    <option value="partial">Частично</option>
-                    <option value="no">Нет (нужны замеры/проектирование)</option>
-                  </select>
-                </label>
-
-                <label className={styles.label}>
-                  Количество позиций
-                  <select className={styles.select} value={state.qty} onChange={(e) => patch("qty", e.target.value as any)}>
-                    <option value="1-5">1–5</option>
-                    <option value="6-20">6–20</option>
-                    <option value="20+">20+</option>
-                  </select>
-                </label>
-              </div>
-
-              <label className={styles.label}>
-                Материал
-                <select className={styles.select} value={state.material} onChange={(e) => patch("material", e.target.value as any)}>
-                  <option value="s235">S235 (углеродистая)</option>
-                  <option value="s355">S355 (углеродистая)</option>
-                  <option value="stainless">Нержавейка</option>
-                  <option value="aluminium">Алюминий</option>
-                </select>
-              </label>
-            </div>
-
-            <div className={styles.card}>
-              <div className={styles.cardTitle}>Точность и сложность</div>
-
-              <label className={styles.check}>
-                <input type="checkbox" checked={state.tightTolerances} onChange={(e) => patch("tightTolerances", e.target.checked)} />
-                Жёсткие допуски / высокая точность (±1–2 мм)
-              </label>
-
-              <label className={styles.check}>
-                <input type="checkbox" checked={state.precisionFit} onChange={(e) => patch("precisionFit", e.target.checked)} />
-                Подгонка “в размер” / стыковка с существующим
-              </label>
-
-              <label className={styles.check}>
-                <input type="checkbox" checked={state.straightening} onChange={(e) => patch("straightening", e.target.checked)} />
-                Ожидается рихтовка / выведение геометрии
-              </label>
-
-              <label className={styles.check}>
-                <input type="checkbox" checked={state.trialFit} onChange={(e) => patch("trialFit", e.target.checked)} />
-                Нужна примерка/сборка в цеху (trial fit)
-              </label>
-
-              <label className={styles.check}>
-                <input type="checkbox" checked={state.manyParts} onChange={(e) => patch("manyParts", e.target.checked)} />
-                Много деталей / сложные узлы
-              </label>
-
-              <div className={styles.hint}>
-                Коэффициент сложности: <b>{calc.complexityFactor.toFixed(2)}</b>
-              </div>
-            </div>
-
-            <div className={styles.card}>
-              <div className={styles.cardTitle}>Стандарты и контроль</div>
-
-              <div className={styles.twoCol}>
-                <label className={styles.label}>
-                  EN 1090 (EXC)
-                  <select className={styles.select} value={state.exc} onChange={(e) => patch("exc", e.target.value as any)}>
-                    <option value="exc1">EXC1</option>
-                    <option value="exc2">EXC2</option>
-                    <option value="exc3">EXC3</option>
-                    <option value="exc4">EXC4</option>
-                  </select>
-                </label>
-
-                <label className={styles.label}>
-                  ISO 5817 (качество)
-                  <select className={styles.select} value={state.iso5817} onChange={(e) => patch("iso5817", e.target.value as any)}>
-                    <option value="d">D</option>
-                    <option value="c">C</option>
-                    <option value="b">B</option>
-                  </select>
-                </label>
-              </div>
-
-              <div className={styles.twoCol}>
-                <label className={styles.label}>
-                  NDT метод
-                  <select className={styles.select} value={state.ndtMethod} onChange={(e) => patch("ndtMethod", e.target.value as NdtMethod)}>
-                    <option value="none">Нет / только визуальный</option>
-                    <option value="vt">VT</option>
-                    <option value="mt">MT</option>
-                    <option value="pt">PT</option>
-                    <option value="ut">UT</option>
-                    <option value="rt">RT</option>
-                  </select>
-                </label>
-
-                <label className={styles.label}>
-                  % контроля
-                  <select className={styles.select} value={String(state.ndtPercent)} onChange={(e) => patch("ndtPercent", Number(e.target.value) as Percent)}>
-                    <option value="0">0%</option>
-                    <option value="10">10%</option>
-                    <option value="25">25%</option>
-                    <option value="50">50%</option>
-                    <option value="100">100%</option>
-                  </select>
-                </label>
-              </div>
-
-              <div className={styles.hint}>
-                Тех. коэффициент (EXC×ISO×срочность×сложность): <b>{calc.techFactor.toFixed(2)}</b>
-              </div>
-            </div>
-
-            <div className={styles.card}>
-              <div className={styles.cardTitle}>Покраска / защита</div>
-
-              <div className={styles.twoCol}>
-                <label className={styles.label}>
-                  Подготовка поверхности
-                  <select className={styles.select} value={state.surfacePrep} onChange={(e) => patch("surfacePrep", e.target.value as SurfacePrep)}>
-                    <option value="st2">St2</option>
-                    <option value="sa25">Sa 2.5</option>
-                  </select>
-                </label>
-
-                <label className={styles.label}>
-                  Покрытие
-                  <select className={styles.select} value={state.coating} onChange={(e) => patch("coating", e.target.value as CoatingSystem)}>
-                    <option value="none">Без покрытия</option>
-                    <option value="primer">Грунт</option>
-                    <option value="c2">C2</option>
-                    <option value="c3">C3</option>
-                    <option value="c4">C4</option>
-                    <option value="c5">C5</option>
-                    <option value="galv">Горячее цинкование</option>
-                    <option value="fire">Огнезащита</option>
-                  </select>
-                </label>
-              </div>
-
-              <div className={styles.twoCol}>
-                <label className={styles.label}>
-                  DFT (мкм)
-                  <select className={styles.select} value={state.dft} onChange={(e) => patch("dft", e.target.value as any)}>
-                    <option value="80">80</option>
-                    <option value="120">120</option>
-                    <option value="160">160</option>
-                    <option value="240">240</option>
-                  </select>
-                </label>
-
-                <label className={styles.label}>
-                  RAL (если нужен)
-                  <input className={styles.input} value={state.ral} onChange={(e) => patch("ral", e.target.value)} placeholder="например RAL 7016" />
-                </label>
-              </div>
-
-              <div className={styles.hint}>
-                Оценка площади под покраску: <b>{Math.round(calc.paintAreaM2)} м²</b> (ориентир по весу)
-              </div>
-            </div>
-
-            <div className={styles.card}>
-              <div className={styles.cardTitle}>Логистика и сроки</div>
-
-              <label className={styles.label}>
-                Доставка
-                <select className={styles.select} value={state.delivery} onChange={(e) => patch("delivery", e.target.value as Delivery)}>
-                  <option value="pickup">Самовывоз / клиент организует</option>
-                  <option value="akweld">AKWELD организует доставку</option>
-                </select>
-              </label>
-
-              <label className={styles.check}>
-                <input type="checkbox" checked={state.oversize} onChange={(e) => patch("oversize", e.target.checked)} />
-                Негабарит / требуется спецтранспорт
-              </label>
-
-              <label className={styles.label}>
-                Срочность
-                <select className={styles.select} value={state.urgency} onChange={(e) => patch("urgency", e.target.value as Urgency)}>
-                  <option value="standard">Стандарт</option>
-                  <option value="rush">Срочно (1–2 недели)</option>
-                  <option value="superrush">Очень срочно (&lt; 1 недели)</option>
-                </select>
-              </label>
-            </div>
-
-            <div className={styles.card}>
-              <div className={styles.cardTitle}>Описание / ссылки</div>
-
-              <label className={styles.label}>
-                Опишите задачу (что изготовить, где монтировать, ссылки на чертежи)
-                <textarea className={styles.textarea} rows={7} value={state.description} onChange={(e) => patch("description", e.target.value)} />
-              </label>
-
-              <div className={styles.small}>
-                Можно вставить ссылку на Drive/Dropbox и указать сроки. Мы уточним вопросы и сделаем точное предложение.
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.result}>
-            <div className={styles.resultTop}>
-              <div>
-                <div className={styles.resultTitle}>Ориентировочная оценка</div>
-                <div className={styles.resultNote}>
-                  Для сайта это “estimate”. Финальная цена зависит от чертежей, объёма NDT, системы покраски и допусков.
-                </div>
-              </div>
-              <div className={styles.total}>{fmtMoney(calc.total)}</div>
-            </div>
-
-            <div className={styles.breakdown}>
-              <div className={styles.line}>
-                <span>Изготовление (по весу)</span>
-                <b>{fmtMoney(calc.fabricationByWeight)}</b>
-              </div>
-              <div className={styles.line}>
-                <span>Изготовление (по часам)</span>
-                <b>{fmtMoney(calc.fabricationByHours)}</b>
-              </div>
-              <div className={styles.line}>
-                <span>Покраска / покрытие</span>
-                <b>{fmtMoney(calc.coatingCost)}</b>
-              </div>
-              <div className={styles.line}>
-                <span>Контроль / NDT</span>
-                <b>{fmtMoney(calc.ndtCost)}</b>
-              </div>
-              <div className={styles.line}>
-                <span>Логистика</span>
-                <b>{fmtMoney(calc.deliveryCost)}</b>
-              </div>
-            </div>
-          </div>
-
-          {status === "error" && (
-            <div className={styles.error}>
-              Не удалось отправить. Попробуйте ещё раз или напишите нам напрямую на email.
-            </div>
-          )}
-
-          <div className={styles.actions}>
-            <button className={styles.button} type="submit" disabled={status === "sending"}>
-              {status === "sending" ? "Отправляем…" : "Отправить запрос"}
-            </button>
-          </div>
-
-          <div className={styles.small}>
-            Админ-настройки ставок находятся вверху файла <b>QuoteCalculatorForm.tsx</b> (CONFIG).
-          </div>
-        </form>
-      )}
-    </div>
+      </section>
+    </main>
   );
 }
