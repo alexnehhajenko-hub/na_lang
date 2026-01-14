@@ -1,4 +1,4 @@
-import QuoteCalculatorForm from "@/src/components/QuoteCalculatorForm";
+import QuoteCalculatorForm from "../../../src/components/QuoteCalculatorForm";
 
 export default function QuotePage() {
   return <QuoteCalculatorForm />;
