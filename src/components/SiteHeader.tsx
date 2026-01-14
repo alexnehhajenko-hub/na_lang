@@ -6,26 +6,38 @@ type Locale = "en" | "sv" | "fi" | "no" | "da" | "ru";
 
 export default function SiteHeader({ locale }: { locale: Locale }) {
   return (
-    <header className="header">
-      <div className="brand">
-        <Link href={`/${locale}`} className="brandLink" aria-label="AKWELD">
-          <Image
-            src="/akweld-emblem.png.PNG"
-            alt="AKWELD"
-            width={44}
-            height={44}
-            className="brandLogo"
-            priority
-          />
-          <span className="brandText">AKWELD</span>
-        </Link>
-      </div>
+    <header
+      className="header"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+      }}
+    >
+      {/* СЛЕВА: только эмблема */}
+      <Link
+        href={`/${locale}`}
+        aria-label="AKWELD"
+        style={{ display: "flex", alignItems: "center" }}
+      >
+        <Image
+          src="/akweld-emblem.png.PNG"
+          alt="AKWELD"
+          width={44}
+          height={44}
+          className="brandLogo"
+          priority
+        />
+      </Link>
 
-      <div className="actions">
-        {/* Кнопка языка — как было (dropdown) */}
+      {/* СПРАВА: язык + кнопка */}
+      <div
+        className="actions"
+        style={{ display: "flex", alignItems: "center", gap: 12 }}
+      >
         <LanguageSwitcher currentLocale={locale} />
 
-        {/* Кнопка "Запросить цену" */}
         <Link href={`/${locale}/quote`} className="cta">
           {locale === "ru" ? "Запросить цену" : "Get a quote"}
         </Link>
