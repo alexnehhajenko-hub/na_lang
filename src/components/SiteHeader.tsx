@@ -22,9 +22,10 @@ export default function SiteHeader({ locale }: { locale: Locale }) {
       </div>
 
       <div className="actions">
+        {/* Кнопка языка — как было (dropdown) */}
         <LanguageSwitcher currentLocale={locale} />
 
-        {/* Кнопка должна вести на локализованный роут */}
+        {/* Кнопка "Запросить цену" */}
         <Link href={`/${locale}/quote`} className="cta">
           {locale === "ru" ? "Запросить цену" : "Get a quote"}
         </Link>
