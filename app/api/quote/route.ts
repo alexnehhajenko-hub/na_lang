@@ -1,20 +1,28 @@
-export const runtime = "nodejs";
-
-function isEmail(v: unknown) {
-  return typeof v === "string" && v.includes("@") && v.length < 200;
-}
+import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    if (!isEmail(body?.email)) {
-      return Response.json({ ok: false, error: "invalid_email" }, { status: 400 });
-    }
+    // Пока просто логируем (в Vercel Logs будет видно)
+    console.log("QUOTE_REQUEST", {
+      createdAt: body?.createdAt,
+      locale: body?.locale,
+      name: body?.name,
+      company: body?.company,
+      phone: body?.phone,
+      email: body?.email,
+      estimateEur: body?.estimateEur,
+    });
 
-    console.log("QUOTE_REQUEST", JSON.stringify(body).slice(0, 20000));
-    return Response.json({ ok: true });
-  } catch {
-    return Response.json({ ok: false }, { status: 500 });
+    // Можно также логировать полный текст:
+    // console.log(body?.requestText);
+
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json(
+      { ok: false, error: e?.message || "Bad request" },
+      { status: 400 }
+    );
   }
 }
