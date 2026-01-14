@@ -1,35 +1,31 @@
-import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 import SiteHeader from "@/src/components/SiteHeader";
 import SiteFooter from "@/src/components/SiteFooter";
-import { isLocale, type Locale } from "@/src/i18n";
 
-export function generateStaticParams() {
-  return [{ locale: "en" }, { locale: "sv" }, { locale: "fi" }, { locale: "da" }, { locale: "no" }, { locale: "ru" }];
-}
+type Locale = "en" | "sv" | "fi" | "no" | "da" | "ru";
 
 export default function LocaleLayout({
   children,
   params,
 }: {
-  children: React.ReactNode;
-  params: { locale: string };
+  children: ReactNode;
+  params: { locale: Locale };
 }) {
-  if (!isLocale(params.locale)) notFound();
-  const locale = params.locale as Locale;
+  const locale = params.locale;
 
   return (
-    <div>
-      <div className="topbar">
-        <div className="container">
-          <SiteHeader locale={locale} />
+    <html lang={locale}>
+      <body>
+        <div className="topbar">
+          <div className="container">
+            <SiteHeader locale={locale} />
+          </div>
         </div>
-      </div>
 
-      <main>{children}</main>
+        <main className="container">{children}</main>
 
-      <div className="container">
         <SiteFooter locale={locale} />
-      </div>
-    </div>
+      </body>
+    </html>
   );
 }
